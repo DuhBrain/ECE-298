@@ -15,6 +15,7 @@ void main(void)
     char buttonState = 0; //Current button press state (to allow edge detection)
     int toggle =1;
     int count=0;
+    int sw = 0;
     /*
      * Functions with two underscores in front are called compiler intrinsics.
      * They are documented in the compiler user guide, not the IDE or MCU guides.
@@ -51,40 +52,38 @@ void main(void)
     //All done initializations - turn interrupts back on.
     __enable_interrupt();
 
-    displayScrollText("ECE 298");
+    displayScrollText("LAB 1 ROBERT ZAIN");
 
     while(1) //Do this when you want an infinite loop of code
     {
         //Buttons SW1 and SW2 are active low (1 until pressed, then 0)
-        if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 1) & (buttonState == 0)) //Look for rising edge
+        if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 1) ) //Look for rising edge
         {
             Timer_A_stop(TIMER_A0_BASE);    //Shut off PWM signal
-            buttonState = 1;                //Capture new button state
+
+            sw=1; //reset switch
+
         }
-        if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 0) & (buttonState == 1)) //Look for falling edge
+        if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 0) & sw==1) //Look for falling edge
         {
-            if(toggle==0 && count>20000){
+            if(toggle==0 ){
                 param.dutyCycle = 400;
                 toggle=1;
-                count=0;
-            }else if (count>20000){
+
+
+            }else if (toggle ==1 ){
                 param.dutyCycle = 900;
-                toggle=1;
-                count=0;
+                toggle=0;
             }
-            count++;
+            sw =0;//deactivate switching
+
             Timer_A_outputPWM(TIMER_A0_BASE, &param);   //Turn on PWM
-            buttonState = 0;                            //Capture new button state
         }
 
         //Start an ADC conversion (if it's not busy) in Single-Channel, Single Conversion Mode
         if (ADCState == 0)
         {
-//            int  num = 32424;
-//            char hex[5];
-//
-//            sprintf(hex, "%x", num);
-//            puts(hex);
+
 
             showHex((int)ADCResult); //Put the previous result on the LCD display
             ADCState = 1; //Set flag to indicate ADC is busy - ADC ISR (interrupt) will clear it
