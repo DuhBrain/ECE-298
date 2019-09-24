@@ -13,7 +13,8 @@ int16_t ADCResult = 0; //Storage for the ADC conversion result
 void main(void)
 {
     char buttonState = 0; //Current button press state (to allow edge detection)
-
+    int toggle =1;
+    int count=0;
     /*
      * Functions with two underscores in front are called compiler intrinsics.
      * They are documented in the compiler user guide, not the IDE or MCU guides.
@@ -62,6 +63,16 @@ void main(void)
         }
         if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 0) & (buttonState == 1)) //Look for falling edge
         {
+            if(toggle==0 && count>20000){
+                param.dutyCycle = 400;
+                toggle=1;
+                count=0;
+            }else if (count>20000){
+                param.dutyCycle = 900;
+                toggle=1;
+                count=0;
+            }
+            count++;
             Timer_A_outputPWM(TIMER_A0_BASE, &param);   //Turn on PWM
             buttonState = 0;                            //Capture new button state
         }
@@ -69,9 +80,16 @@ void main(void)
         //Start an ADC conversion (if it's not busy) in Single-Channel, Single Conversion Mode
         if (ADCState == 0)
         {
+//            int  num = 32424;
+//            char hex[5];
+//
+//            sprintf(hex, "%x", num);
+//            puts(hex);
+
             showHex((int)ADCResult); //Put the previous result on the LCD display
             ADCState = 1; //Set flag to indicate ADC is busy - ADC ISR (interrupt) will clear it
             ADC_startConversion(ADC_BASE, ADC_SINGLECHANNEL);
+
         }
     }
 

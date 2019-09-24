@@ -17,7 +17,7 @@
 //***************************************************************************************
 
 #include <msp430.h>
-
+#include <stdio.h>
 void main(void) {
     WDTCTL = WDTPW | WDTHOLD;               // Stop watchdog timer
     PM5CTL0 &= ~LOCKLPM5;                   // Disable the GPIO power-on default high-impedance mode
@@ -28,8 +28,10 @@ void main(void) {
         volatile unsigned int i;            // volatile to prevent optimization
 
         P1OUT ^= 0x01;                      // Toggle P1.0 using exclusive-OR
+        printf("hi\n");
+        fflush (stdout);
 
-        i = 10000;                          // SW Delay
+        i = 50000;                          // SW Delay
         do i--;
         while(i != 0);
     }

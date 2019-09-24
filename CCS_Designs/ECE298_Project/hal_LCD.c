@@ -194,12 +194,22 @@ void showChar(char c, int position)
 /*
  * Displays hex value
  */
-void showHex(int hex)
+void showHex(int hex) //show decimal
 {
-    showChar((char)((0xC0 & hex) >> 6) + '0', pos3);
-    showChar((char)((0x30 & hex) >> 4) + '0', pos4);
-    showChar((char)((0x0C & hex) >> 2) + '0', pos5);
-    showChar((char)(0x03 & hex) + '0', pos6);
+//    showChar((char)((0xC0 & hex) >> 6) + '0', pos3);
+//    showChar((char)((0x30 & hex) >> 4) + '0', pos4);
+//    showChar((char)((0x0C & hex) >> 2) + '0', pos5);
+//    showChar((char)(0x03 & hex) + '0', pos6);
+
+//    showChar((char) ((hex >>12)& 0xF)+'0', pos3);
+//    showChar((char) ((hex>>8)& 0xF) +'0', pos4);
+//    showChar((char)((hex >> 4)& 0xF)+'0', pos5);
+//    showChar((char) ((hex)& 0xF) +'0', pos6);
+
+    showChar((char) ((int)(hex/1000)& 0xF)+'0', pos3);
+    showChar((char) ((int)((hex%1000)/100)& 0xF) +'0', pos4);
+    showChar((char)((int)((hex%100)/10)& 0xF)+'0', pos5);
+    showChar((char) ((int)(hex%10)& 0xF) +'0', pos6);
 }
 
 /*
