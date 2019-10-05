@@ -3,8 +3,8 @@
 
 #include "driverlib/driverlib.h"
 
-#define TIMER_A_PERIOD  1000 //T = 1/f = (TIMER_A_PERIOD * 1 us)
-#define HIGH_COUNT      500  //Number of cycles signal is high (Duty Cycle = HIGH_COUNT / TIMER_A_PERIOD)
+#define TIMER_A_PERIOD  1000*20 //T = 1/f = (TIMER_A_PERIOD * 1 us)
+#define HIGH_COUNT      1000  //Number of cycles signal is high (Duty Cycle = HIGH_COUNT / TIMER_A_PERIOD)
 
 //Output pin to buzzer
 #define PWM_PORT        GPIO_PORT_P1

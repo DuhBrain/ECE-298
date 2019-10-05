@@ -67,12 +67,12 @@ void main(void)
         if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 0) & sw==1) //Look for falling edge
         {
             if(toggle==0 ){
-                param.dutyCycle = 400;
+                param.dutyCycle = 2000;
                 toggle=1;
 
 
             }else if (toggle ==1 ){
-                param.dutyCycle = 900;
+                param.dutyCycle = 1000;
                 toggle=0;
             }
             sw =0;//deactivate switching
