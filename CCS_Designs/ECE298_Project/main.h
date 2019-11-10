@@ -30,7 +30,9 @@ void Init_GPIO(void);
 void Init_Clock(void);
 void Init_UART(void);
 void Init_PWM(void);
-void Init_ADC(void);
+void Init_ADC(int, int, int);
+void get_sensor_info(void);
+void Init_PB(void);
 
 Timer_A_outputPWMParam param; //Timer configuration data structure for PWM
 
