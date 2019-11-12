@@ -12,11 +12,12 @@
 char ADCState = 0; //Busy state of the ADC
 int16_t ADCResult = 0; //Storage for the ADC conversion result
 int daytime = 0; //set based on light sensor input
-int zone = 0;
+int display_zone = 0;
 int params [4]; // vent1, vent2, irr1, irr2
 float temp[2]; //zone1, zone2
 int moisture[2]; //zone1, zone 2
 int debug =0;
+
 
 void main(void)
 {
@@ -27,6 +28,7 @@ void main(void)
     char daytime_msg[20];
     char temp_msg[20];
     char moist_msg[20];
+    char curr_zone[20];
 
     /*
      * Functions with two underscores in front are called compiler intrinsics.
@@ -65,11 +67,12 @@ void main(void)
     //All done initializations - turn interrupts back on.
     __enable_interrupt();
 
+    GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5); //enable mux???
 
     while(1) //Do this when you want an infinite loop of code
     {
         //Buttons SW1 and SW2 are active low (1 until pressed, then 0)  //  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>to be changed
-        if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 1) ) //Look for rising edge
+       /* if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 1) ) //Look for rising edge
         {
             Timer_A_stop(TIMER_A0_BASE);    //Shut off PWM signal
 
@@ -90,27 +93,37 @@ void main(void)
             sw =0;//deactivate switching
 
             Timer_A_outputPWM(TIMER_A0_BASE, &param);   //Turn on PWM
-        }  //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<to be changed
+        }*/  //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<to be changed
 
 
 
-        get_sensor_info();
+        get_sensor_info(0,GPIO_PORT_P1, GPIO_PIN3, ADC_INPUT_A3, GPIO_PORT_P1,GPIO_PIN4, ADC_INPUT_A4); //get conditions for zone 0
+        get_sensor_info(1, GPIO_PORT_P1, GPIO_PIN6, ADC_INPUT_A6, GPIO_PORT_P1,GPIO_PIN5, ADC_INPUT_A5); //get conditions for zone 1
 
 
+        //now check environmental conditions and run motors + LEDs if needed
+        //check_conditions();
 
-        if(debug==1){
-            displayScrollText("ISR");
-            GPIO_setOutputHighOnPin(LED2_PORT,LED2_PIN); //only on for 1 clock cycle
-        }
+        sprintf(curr_zone,"ZONE %d", display_zone);
+        displayScrollText(curr_zone);
 
         sprintf(daytime_msg,"DAY %d", daytime);
         displayScrollText(daytime_msg);
 
-        sprintf(temp_msg," TEMP %d",(int)temp[zone]);
+        sprintf(temp_msg," TEMP %d",(int)temp[display_zone]);
         displayScrollText(temp_msg);
 
-        sprintf(moist_msg," MOIST %d",moisture[zone]);
+        sprintf(moist_msg," MOIST %d",moisture[display_zone]);
         displayScrollText(moist_msg);
+
+        if(display_zone){ //for testing motors
+            param.dutyCycle = 2000;
+            Timer_A_outputPWM(TIMER_A0_BASE, &param);
+        }else{
+            param.dutyCycle = 1000;
+            Timer_A_outputPWM(TIMER_A0_BASE, &param);
+        }
+
 
 //        showHex(daytime);
 
@@ -152,10 +165,18 @@ void Init_GPIO(void)
     //Set LaunchPad switches as inputs - they are active low, meaning '1' until pressed
     GPIO_setAsInputPinWithPullUpResistor(SW1_PORT, SW1_PIN);
     GPIO_setAsInputPinWithPullUpResistor(SW2_PORT, SW2_PIN);
-
     //Set LED1 and LED2 as outputs
 //    GPIO_setAsOutputPin(LED1_PORT, LED1_PIN); //Comment if using UART
     GPIO_setAsOutputPin(LED2_PORT, LED2_PIN);
+    //blue green leds
+    GPIO_setAsOutputPin(GPIO_PORT_P5, GPIO_PIN2);
+    GPIO_setAsOutputPin(GPIO_PORT_P5, GPIO_PIN3);
+    GPIO_setAsOutputPin(GPIO_PORT_P2, GPIO_PIN7);
+    GPIO_setAsOutputPin(GPIO_PORT_P8, GPIO_PIN0);
+    //mux
+    GPIO_setAsOutputPin(GPIO_PORT_P2, GPIO_PIN5);//mux en
+    GPIO_setAsOutputPin(GPIO_PORT_P8, GPIO_PIN2);// i0
+    GPIO_setAsOutputPin(GPIO_PORT_P8, GPIO_PIN3);//i1
 }
 
 /* Clock System Initialization */
@@ -293,7 +314,7 @@ void Init_PB(){
 #pragma vector=PORT1_VECTOR //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 __interrupt
 void PB1_ISR(void){
-    debug ^= 1;
+    display_zone ^= 1;
     GPIO_clearInterrupt(SW1_PORT,SW1_PIN);
 
 }
@@ -375,8 +396,11 @@ void ADC_ISR(void)
     }
 }
 
-void get_sensor_info(){
+void get_sensor_info(int zone, int temp_port, int temp_pin, int temp_adc_input, int moist_port, int moist_pin, int moist_adc_input){
     /* this function will check the sensors of the appropriate zone, then set the appropriate variable values*/
+    float new_temp [2];
+    int tolerance = 3;
+    float average_temp;
 
     //get light sensor data and set daytime varible
 
@@ -393,23 +417,92 @@ void get_sensor_info(){
 
 
 
-    Init_ADC(GPIO_PORT_P1,GPIO_PIN3,ADC_INPUT_A3);
+    Init_ADC(temp_port,temp_pin,temp_adc_input);
     ADCState = 1;
 
     ADC_startConversion(ADC_BASE, ADC_SINGLECHANNEL);
     while(ADCState==1);
-    temp[zone] =ADCResult * 3.3/1024;
-    temp[zone] -= 0.5;
-    temp[zone] *=100;
+    new_temp[0] = ADCResult * 3.3/1024;
+    new_temp[0] -= 0.5;
+    new_temp[0] *= 100;
+
+    ADC_startConversion(ADC_BASE, ADC_SINGLECHANNEL);
+    while(ADCState==1);
+    new_temp[1] = ADCResult * 3.3/1024;
+    new_temp[1] -= 0.5;
+    new_temp[1] *= 100;
+
+
+    average_temp = (new_temp[0] + new_temp[1])/2;
+    if( abs(new_temp[0] - new_temp[1])< tolerance && average_temp <30 && average_temp >10 ){
+        temp[zone] = average_temp;
+    }
+//    temp[zone] =ADCResult * 3.3/1024;
+//    temp[zone] -= 0.5;
+//    temp[zone] *=100;
 
 
 
 
 
-    Init_ADC(GPIO_PORT_P1,GPIO_PIN4,ADC_INPUT_A4);
+    Init_ADC(moist_port,moist_pin,moist_adc_input);
     ADCState = 1;
     ADC_startConversion(ADC_BASE, ADC_SINGLECHANNEL);
     while(ADCState==1);
     moisture[zone] = ADCResult;
+
+}
+
+void check_conditions(int zone){
+
+    //check temp
+    if(temp[zone]>params[zone]){
+
+        //set led output
+        if(zone==0){
+            GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
+
+            //set mux i0 i1 signals (ZAIN)
+
+        }else{
+            GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN3); //LED2 green for temp
+
+            //set mux i0 i1 signals (ZAIN)
+
+        }
+
+        //send out pwm
+        param.dutyCycle = 2000;
+        Timer_A_outputPWM(TIMER_A0_BASE, &param);
+
+    }else{
+        //turn off LEDs
+        if(zone==0){
+            GPIO_setOutputLowOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
+        }else{
+            GPIO_setOutputLowOnPin(GPIO_PORT_P5, GPIO_PIN3); //LED2 green for temp
+        }
+
+        //set mux i0 i1 signals (ZAIN)
+
+        //rotate motor back
+        param.dutyCycle = 1000;
+        Timer_A_outputPWM(TIMER_A0_BASE, &param);
+    }
+
+
+
+    //check moisture
+    if(moisture[zone]> params[2+zone]){
+        //turn on LED and run motor
+        if(zone==0){
+            GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
+        }else{
+            GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN0); //LED4 blue for moisture
+        }
+
+    }else{
+        //turn off LED and rotate motor other direction
+    }
 
 }

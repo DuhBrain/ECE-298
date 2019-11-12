@@ -31,8 +31,10 @@ void Init_Clock(void);
 void Init_UART(void);
 void Init_PWM(void);
 void Init_ADC(int, int, int);
-void get_sensor_info(void);
+void get_sensor_info(int zone, int temp_port, int temp_pin, int temp_adc_input, int moist_port, int moist_pin, int moist_adc_input);
 void Init_PB(void);
+void check_conditions(int);
+
 
 Timer_A_outputPWMParam param; //Timer configuration data structure for PWM
 
