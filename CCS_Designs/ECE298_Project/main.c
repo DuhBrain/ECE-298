@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 /*
  * This project contains some code samples that may be useful.
  *
@@ -102,7 +103,8 @@ void main(void)
 
 
         //now check environmental conditions and run motors + LEDs if needed
-        //check_conditions();
+        //check_conditions(0);
+        //check_conditions(1);
 
         sprintf(curr_zone,"ZONE %d", display_zone);
         displayScrollText(curr_zone);
@@ -174,9 +176,11 @@ void Init_GPIO(void)
     GPIO_setAsOutputPin(GPIO_PORT_P2, GPIO_PIN7);
     GPIO_setAsOutputPin(GPIO_PORT_P8, GPIO_PIN0);
     //mux
-    GPIO_setAsOutputPin(GPIO_PORT_P2, GPIO_PIN5);//mux en
+    GPIO_setAsOutputPin(GPIO_PORT_P2, GPIO_PIN5);//mux_en
     GPIO_setAsOutputPin(GPIO_PORT_P8, GPIO_PIN2);// i0
     GPIO_setAsOutputPin(GPIO_PORT_P8, GPIO_PIN3);//i1
+
+    GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);//enable is active low
 }
 
 /* Clock System Initialization */
@@ -455,25 +459,42 @@ void get_sensor_info(int zone, int temp_port, int temp_pin, int temp_adc_input, 
 
 void check_conditions(int zone){
 
+    /*
+     * Motor Definitions:
+     *
+     * M0 (i1 = LOW, i0 = LOW)      - Ventilation zone 0
+     * M1 (i1 = LOW, i0 = HIGH)     - Irrigation zone 0
+     * M2 (i1 = HIGH, i0 = LOW)     - Ventilation zone 1
+     * M3 (i1 = HIGH, i0 = HIGH)    - Irrigation zone 1
+     */
+
     //check temp
     if(temp[zone]>params[zone]){
 
-        //set led output
+        //set led output and motor selectors
         if(zone==0){
             GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
 
-            //set mux i0 i1 signals (ZAIN)
+            // Select M0
+            GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
+            GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
 
         }else{
             GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN3); //LED2 green for temp
 
-            //set mux i0 i1 signals (ZAIN)
+            // Select M2
+            GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
+            GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
 
         }
+
+        // enable
+        GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5);
 
         //send out pwm
         param.dutyCycle = 2000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
+        sleep(1);
 
     }else{
         //turn off LEDs
@@ -483,11 +504,13 @@ void check_conditions(int zone){
             GPIO_setOutputLowOnPin(GPIO_PORT_P5, GPIO_PIN3); //LED2 green for temp
         }
 
-        //set mux i0 i1 signals (ZAIN)
+        //disable mux
+        GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
 
         //rotate motor back
         param.dutyCycle = 1000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
+        sleep(1);
     }
 
 
@@ -497,12 +520,43 @@ void check_conditions(int zone){
         //turn on LED and run motor
         if(zone==0){
             GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
+
+            // Select M1
+            GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
+            GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
+
         }else{
             GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN0); //LED4 blue for moisture
+
+            // Select M3
+            GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
+            GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
+
         }
+
+        // enable
+        GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5);
+
+        //send out pwm
+        param.dutyCycle = 2000;
+        Timer_A_outputPWM(TIMER_A0_BASE, &param);
+        sleep(1);
 
     }else{
         //turn off LED and rotate motor other direction
+        if(zone==0){
+            GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
+        }else{
+            GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN0); //LED4 blue for moisture
+        }
+
+        //disable mux
+        GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
+
+        //rotate motor back
+        param.dutyCycle = 1000;
+        Timer_A_outputPWM(TIMER_A0_BASE, &param);
+        sleep(1);
     }
 
 }
