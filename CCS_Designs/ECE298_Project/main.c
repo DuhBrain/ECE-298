@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+//#include <unistd.h>
 /*
  * This project contains some code samples that may be useful.
  *
@@ -14,7 +14,7 @@ char ADCState = 0; //Busy state of the ADC
 int16_t ADCResult = 0; //Storage for the ADC conversion result
 int daytime = 0; //set based on light sensor input
 int display_zone = 0;
-int params [4]; // vent1, vent2, irr1, irr2
+int params [4] =  {1000,1000,200,200}; // vent1, vent2, irr1, irr2
 float temp[2]; //zone1, zone2
 int moisture[2]; //zone1, zone 2
 int debug =0;
@@ -67,6 +67,10 @@ void main(void)
 
     //All done initializations - turn interrupts back on.
     __enable_interrupt();
+//    GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
+//    GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN0); //LED4 blue for moisture
+//    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
+//    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN3);
 
     GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5); //enable mux???
 
@@ -97,14 +101,15 @@ void main(void)
         }*/  //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<to be changed
 
 
-
+        //J3: A3 is temp A4 is moisture sensor
         get_sensor_info(0,GPIO_PORT_P1, GPIO_PIN3, ADC_INPUT_A3, GPIO_PORT_P1,GPIO_PIN4, ADC_INPUT_A4); //get conditions for zone 0
+        //J4 A6 is temp, a5 is moisture
         get_sensor_info(1, GPIO_PORT_P1, GPIO_PIN6, ADC_INPUT_A6, GPIO_PORT_P1,GPIO_PIN5, ADC_INPUT_A5); //get conditions for zone 1
 
 
         //now check environmental conditions and run motors + LEDs if needed
-        //check_conditions(0);
-        //check_conditions(1);
+        check_conditions(0);
+        check_conditions(1);
 
         sprintf(curr_zone,"ZONE %d", display_zone);
         displayScrollText(curr_zone);
@@ -118,10 +123,15 @@ void main(void)
         sprintf(moist_msg," MOIST %d",moisture[display_zone]);
         displayScrollText(moist_msg);
 
+        // Select M0
+        GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
+        GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
+
         if(display_zone){ //for testing motors
             param.dutyCycle = 2000;
             Timer_A_outputPWM(TIMER_A0_BASE, &param);
         }else{
+
             param.dutyCycle = 1000;
             Timer_A_outputPWM(TIMER_A0_BASE, &param);
         }
@@ -494,7 +504,7 @@ void check_conditions(int zone){
         //send out pwm
         param.dutyCycle = 2000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
-        sleep(1);
+//        sleep(1);
 
     }else{
         //turn off LEDs
@@ -510,13 +520,13 @@ void check_conditions(int zone){
         //rotate motor back
         param.dutyCycle = 1000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
-        sleep(1);
+//        sleep(1);
     }
 
 
 
     //check moisture
-    if(moisture[zone]> params[2+zone]){
+    if(moisture[zone]< params[2+zone]){
         //turn on LED and run motor
         if(zone==0){
             GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
@@ -540,7 +550,7 @@ void check_conditions(int zone){
         //send out pwm
         param.dutyCycle = 2000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
-        sleep(1);
+//        sleep(1);
 
     }else{
         //turn off LED and rotate motor other direction
@@ -556,7 +566,7 @@ void check_conditions(int zone){
         //rotate motor back
         param.dutyCycle = 1000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
-        sleep(1);
+//        sleep(1);
     }
 
 }
