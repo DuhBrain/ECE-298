@@ -18,6 +18,7 @@ int params [4] =  {1000,1000,200,200}; // vent1, vent2, irr1, irr2
 float temp[2]; //zone1, zone2
 int moisture[2]; //zone1, zone 2
 int debug =0;
+uint8_t uartRxData;
 
 
 void main(void)
@@ -72,7 +73,10 @@ void main(void)
 //    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
 //    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN3);
 
-    GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5); //enable mux???
+    //set mux to be disabled initially so that nothing is connected to pwm
+    GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
+
+    setup_parameters();
 
     while(1) //Do this when you want an infinite loop of code
     {
@@ -288,6 +292,7 @@ void EUSCIA0_ISR(void)
     if (RxStatus)
     {
         EUSCI_A_UART_transmitData(EUSCI_A0_BASE, EUSCI_A_UART_receiveData(EUSCI_A0_BASE));
+        //uartRxData = EUSCI_A_UART_receiveData(EUSCI_A0_BASE);
     }
 }
 
@@ -570,3 +575,16 @@ void check_conditions(int zone){
     }
 
 }
+
+void setup_parameters( void )
+{
+    char message[] = "Please input desired temperature threshold (2 digits) and press Enter\n";
+
+    int i;
+    for ( i = 0 ; i < sizeof(message) ; i++ )
+    {
+        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (int) message[i]);
+    }
+}
+
+
