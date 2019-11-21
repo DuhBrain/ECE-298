@@ -37,7 +37,7 @@ void main(void)
 
     Init();
 
-    uartDisplay(&clearTerm, sizeof(uint8_t)); /* send clear terminal character */
+    bootSequence();
 
     welcomeMsgCLI();
 
@@ -422,7 +422,7 @@ void check_conditions(int zone){
 
 
     //check temp----------------------------------------------------------------------------------------------------
-    if(daytime==0){//(temp[zone]>params[zone])&& daytime==1){
+    if((temp[zone]>params[zone])&& daytime==1){
 
         //set led output and motor selectors
         if(zone==0){
@@ -470,7 +470,7 @@ void check_conditions(int zone){
 
 
     //check moisture---------------------------------------------------------------------------------------------------
-    if(daytime==0){//(moisture[zone]< params[2+zone]) && daytime==0){
+    if ((moisture[zone]< params[2+zone]) && daytime==0){
 
         //turn on LED and run motor
         if(zone==0){
@@ -516,7 +516,7 @@ void check_conditions(int zone){
 }
 
 /* Tx to UART */
-void uartDisplay(uint8_t *sendText, uint8_t length)
+void uartDisplay(uint8_t *sendText, uint8_t length, _Bool boot)
 {
     EUSCI_A_UART_transmitData(EUSCI_A0_BASE, 13); /* send carrier return*/
     while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
@@ -530,7 +530,7 @@ void uartDisplay(uint8_t *sendText, uint8_t length)
         while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
     }
 
-    if ((sendText[0] != '>') && (sendText[0] != '#') && (sendText[0] != ' ') && (*sendText != clearTerm)) /* if not enter key or welcome message, it was command, make new line */
+    if ((sendText[0] != '>') && (sendText[0] != '#') && (sendText[0] != ' ') && (*sendText != clearTerm) && !boot) /* if not enter key or welcome message, it was command, make new line */
     {
         EUSCI_A_UART_transmitData(EUSCI_A0_BASE, 13); /* send carrier return*/
         while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
@@ -557,10 +557,10 @@ void uartTransmit(void)
     if (! strcmp((char*)cliBuffer, "")) /* enter key*/
     {
         strcpy((char*) txMsg, "> "); /* prompt */
-        uartDisplay(txMsg, strlen((char*) txMsg));
+        uartDisplay(txMsg, strlen((char*) txMsg), false);
     }
 
-    else if (! strcmp((char*)cliBuffer, "?")) /* help key*/
+    else if (! strcmp((char*)cliBuffer, "help")) /* help key*/
     {
         welcomeMsgCLI();
     }
@@ -581,57 +581,65 @@ void uartTransmit(void)
             {
                 params[0] = newThreshold;
                 strcpy((char*) txMsg, "The new threshold for temperature motor 1 was set");
-                uartDisplay(txMsg, strlen((char*) txMsg));
+                uartDisplay(txMsg, strlen((char*) txMsg), false);
             }
             else if ((cliBuffer[4] == 't') && (cliBuffer[5] == '2')) /*temp2 threshold */
             {
                 params[1] = newThreshold;
                 strcpy((char*) txMsg, "The new threshold for temperature motor 2 was set");
-                uartDisplay(txMsg, strlen((char*) txMsg));
+                uartDisplay(txMsg, strlen((char*) txMsg), false);
             }
             else if ((cliBuffer[4] == 'm') && (cliBuffer[5] == '1')) /*moisture1 threshold */
             {
-                params[2] = (int)(((float)newThreshold / 100) * 1024);
+                params[2] = (int)(((float)newThreshold / 100) * 1024)+1;
                 strcpy((char*) txMsg, "The new threshold for soil motor 1 was set");
-                uartDisplay(txMsg, strlen((char*) txMsg));
+                uartDisplay(txMsg, strlen((char*) txMsg), false);
             }
             else if ((cliBuffer[4] == 'm') && (cliBuffer[5] == '2')) /* moisture2 threshold */
             {
-                params[3] = (int)(((float)newThreshold / 100) * 1024);
+                params[3] = (int)(((float)newThreshold / 100) * 1024)+1;
                 strcpy((char*) txMsg, "The new threshold for soil motor 2 was set");
-                uartDisplay(txMsg, strlen((char*) txMsg));
+                uartDisplay(txMsg, strlen((char*) txMsg), false);
             }
             else /* threshold set error*/
             {
                 strcpy((char*) txMsg, "ERROR: Invalid threshold!");
-                uartDisplay(txMsg, strlen((char*) txMsg));
+                uartDisplay(txMsg, strlen((char*) txMsg), false);
             }
         }
         else /* threshold set error*/
         {
             strcpy((char*) txMsg, "ERROR: Invalid threshold!");
-            uartDisplay(txMsg, strlen((char*) txMsg));
+            uartDisplay(txMsg, strlen((char*) txMsg), false);
         }
     }
 
     else if (! strcmp((char*)cliBuffer, "display")) /* print values */
     {
         sprintf((char*) txMsg," Displaying values:");
-        uartDisplay(txMsg, strlen((char*) txMsg));
+        uartDisplay(txMsg, strlen((char*) txMsg), false);
         sprintf((char*) txMsg,"  Zone 1 Temperature:    %d\t(Threshold: %d)", (int)temp[0], params[0]);
-        uartDisplay(txMsg, strlen((char*) txMsg));
+        uartDisplay(txMsg, strlen((char*) txMsg), false);
         sprintf((char*) txMsg,"  Zone 1 Soil Moisture:  %d\t(Threshold: %d)", (int)(((float)moisture[0] / 1024)*100), (int)(((float)params[2] / 1024) * 100));
-        uartDisplay(txMsg, strlen((char*) txMsg));
+        uartDisplay(txMsg, strlen((char*) txMsg), false);
         sprintf((char*) txMsg,"  Zone 2 Temperature:    %d\t(Threshold: %d)", (int)temp[1], params[1]);
-        uartDisplay(txMsg, strlen((char*) txMsg));
+        uartDisplay(txMsg, strlen((char*) txMsg), false);
         sprintf((char*) txMsg,"  Zone 2 Soil Moisture:  %d\t(Threshold: %d)\r\n> ", (int)(((float)moisture[1] / 1024)*100), (int)(((float)params[3] / 1024) * 100));
-        uartDisplay(txMsg, strlen((char*) txMsg));
+        uartDisplay(txMsg, strlen((char*) txMsg), false);
+    }
+
+    else if (! strcmp((char*)cliBuffer, "clear")) /* print values */
+    {
+        uartDisplay(&clearTerm, sizeof(uint8_t), false); /* send clear terminal character */
+
+        sprintf((char*) txMsg,"> "); /* new prompt character */
+        uartDisplay(txMsg, strlen((char*) txMsg), false);
     }
 
     else
     {
         strcpy((char*) txMsg, "ERROR: Invalid command!"); /* error */
-        uartDisplay(txMsg, strlen((char*) txMsg));
+        uartDisplay(txMsg, strlen((char*) txMsg), false);
     }
 
     cliIndex = 0;
@@ -649,12 +657,14 @@ void welcomeMsgCLI(void)
         cliWelcome[cliIndex]= 0; /* initialize welcome message */
     }
 
-    strcpy((char*) cliWelcome, " Threshold for each motor (0-100) can be set independently with the SET command:");
-    uartDisplay(cliWelcome, strlen((char*) cliWelcome));
-    strcpy((char*) cliWelcome, " set t1 <num>    set m1 <num>    set t2 <num>    set m2 <num>\r\n");
-    uartDisplay(cliWelcome, strlen((char*) cliWelcome));
+    strcpy((char*) cliWelcome, " Threshold for each motor (0-100) can be set independently with the 'set' command:");
+    uartDisplay(cliWelcome, strlen((char*) cliWelcome), false);
+    strcpy((char*) cliWelcome, " \tset t1 <num>    set m1 <num>    set t2 <num>    set m2 <num>");
+    uartDisplay(cliWelcome, strlen((char*) cliWelcome), false);
+    strcpy((char*) cliWelcome, " Use 'display' to show sensor values and thresholds, 'help' to show this message\r\n");
+    uartDisplay(cliWelcome, strlen((char*) cliWelcome), false);
     strcpy((char*) cliWelcome, "> "); /* prompt */
-    uartDisplay(cliWelcome, strlen((char*) cliWelcome));
+    uartDisplay(cliWelcome, strlen((char*) cliWelcome), false);
 }
 
 void Init(void)
@@ -681,4 +691,20 @@ void Init(void)
     __enable_interrupt();
 
     __delay_cycles(500000);
+}
+
+void bootSequence(void)
+{
+    uint8_t txMsg[100]; /* UART TX message */
+
+    int i;
+    for (i = 0 ; i < 50 ; i++) /* initialize txMsg buffer */
+    {
+        txMsg[i] = 0;
+    }
+
+    uartDisplay(&clearTerm, sizeof(uint8_t), false); /* send clear terminal character */
+
+    strcpy((char*) txMsg, " *** B U M   B E H A V I O U R   I N I T I A T E D *** \r\n");
+    uartDisplay(txMsg, strlen((char*) txMsg), true);
 }

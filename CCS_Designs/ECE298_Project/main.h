@@ -45,9 +45,10 @@ void Init_ADC(int, int, int);
 void get_sensor_info(int zone, int temp_port, int temp_pin, int temp_adc_input, int moist_port, int moist_pin, int moist_adc_input);
 void Init_PB(void);
 void check_conditions(int);
-void uartDisplay(uint8_t *sendText, uint8_t length);
+void uartDisplay(uint8_t *sendText, uint8_t length, _Bool boot);
 void uartTransmit(void);
 void welcomeMsgCLI(void);
+void bootSequence(void);
 
 
 Timer_A_outputPWMParam param; //Timer configuration data structure for PWM
