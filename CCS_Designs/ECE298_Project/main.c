@@ -12,6 +12,12 @@ uint8_t uartRxData;
 static _Bool uartReceived = false;                          /* UART receive flag */
 static uint8_t cliBuffer[cliBufferSize];                    /* CLI output buffer */
 static uint8_t cliIndex = 0;                                /* CLI buffer index */
+int temp_toggle[2] = {0,0};
+int moist_toggle[2] = {0,0};
+void delay()
+{
+    __delay_cycles(200000*10);
+}
 
 
 void main(void)
@@ -24,6 +30,7 @@ void main(void)
     char temp_msg[20];
     char moist_msg[20];
     char curr_zone[20];
+    char updates[256];
 
     /*
      * Functions with two underscores in front are called compiler intrinsics.
@@ -49,22 +56,12 @@ void main(void)
     Init_LCD();     //Sets up the LaunchPad LCD display
     Init_PB();
 
-     /*
-     * The MSP430 MCUs have a variety of low power modes. They can be almost
-     * completely off and turn back on only when an interrupt occurs. You can
-     * look up the power modes in the Family User Guide under the Power Management
-     * Module (PMM) section. You can see the available API calls in the DriverLib
-     * user guide, or see "pmm.h" in the driverlib directory. Unless you
-     * purposefully want to play with the power modes, just leave this command in.
-     */
+
     PMM_unlockLPM5(); //Disable the GPIO power-on default high-impedance mode to activate previously configured port settings
 
     //All done initializations - turn interrupts back on.
     __enable_interrupt();
-//    GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
-//    GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN0); //LED4 blue for moisture
-//    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
-//    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN3);
+
 
     welcomeMsgCLI();
 
@@ -73,31 +70,6 @@ void main(void)
 
     while(1) //Do this when you want an infinite loop of code
     {
-        //Buttons SW1 and SW2 are active low (1 until pressed, then 0)  //  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>to be changed
-       /* if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 1) ) //Look for rising edge
-        {
-            Timer_A_stop(TIMER_A0_BASE);    //Shut off PWM signal
-
-            sw=1; //reset switch
-
-        }
-        if ((GPIO_getInputPinValue(SW1_PORT, SW1_PIN) == 0) & sw==1) //Look for falling edge
-        {
-            if(toggle==0 ){
-                param.dutyCycle = 2000;
-                toggle=1;
-
-
-            }else if (toggle ==1 ){
-                param.dutyCycle = 1000;
-                toggle=0;
-            }
-            sw =0;//deactivate switching
-
-            Timer_A_outputPWM(TIMER_A0_BASE, &param);   //Turn on PWM
-        }*/  //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<to be changed
-
-
         //J3: A3 is temp A4 is moisture sensor
         get_sensor_info(0,GPIO_PORT_P1, GPIO_PIN3, ADC_INPUT_A3, GPIO_PORT_P1,GPIO_PIN4, ADC_INPUT_A4); //get conditions for zone 0
         //J4 A6 is temp, a5 is moisture
@@ -108,49 +80,15 @@ void main(void)
         check_conditions(0);
         check_conditions(1);
 
-        sprintf(curr_zone,"ZONE %d", display_zone);
-        displayScrollText(curr_zone);
+        sprintf(updates," ZONE %d DAY %d TMP %d WTR %d",display_zone,daytime,(int)temp[display_zone],moisture[display_zone]);
+        displayScrollText(updates);
 
-        sprintf(daytime_msg,"DAY %d", daytime);
-        displayScrollText(daytime_msg);
-
-        sprintf(temp_msg," TEMP %d",(int)temp[display_zone]);
-        displayScrollText(temp_msg);
-
-        sprintf(moist_msg," MOIST %d",moisture[display_zone]);
-        displayScrollText(moist_msg);
-
-        // Select M0
-        GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
-        GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
-
-        if(display_zone){ //for testing motors
-            param.dutyCycle = 2000;
-            Timer_A_outputPWM(TIMER_A0_BASE, &param);
-        }else{
-
-            param.dutyCycle = 1000;
-            Timer_A_outputPWM(TIMER_A0_BASE, &param);
-        }
-
-        if (uartReceived)                       /* UART communication */
+        //UART communication
+        if (uartReceived)
         {
             uartTransmit();
         }
-//        showHex(daytime);
-
     }
-
-    /*
-     * You can use the following code if you plan on only using interrupts
-     * to handle all your system events since you don't need any infinite loop of code.
-     *
-     * //Enter LPM0 - interrupts only
-     * __bis_SR_register(LPM0_bits);
-     * //For debugger to let it know that you meant for there to be no more code
-     * __no_operation();
-    */
-
 }
 
 void Init_GPIO(void)
@@ -500,8 +438,9 @@ void check_conditions(int zone){
      * M3 (i1 = HIGH, i0 = HIGH)    - Irrigation zone 1
      */
 
-    //check temp
-    if(temp[zone]>params[zone]){
+
+    //check temp----------------------------------------------------------------------------------------------------
+    if(daytime==0){//(temp[zone]>params[zone])&& daytime==1){
 
         //set led output and motor selectors
         if(zone==0){
@@ -519,36 +458,38 @@ void check_conditions(int zone){
             GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
 
         }
-
-        // enable
+        //enable motors (MUX)
         GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5);
 
         //send out pwm
-        param.dutyCycle = 2000;
+        param.dutyCycle = 1000*(temp_toggle[zone]+1); //either 0+1 or 1+1
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
-//        sleep(1);
+        delay();
+        temp_toggle[zone]= temp_toggle[zone]^1;
+
+
 
     }else{
+        //disable motors (MUX)
+        GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
+
         //turn off LEDs
         if(zone==0){
             GPIO_setOutputLowOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
+
         }else{
             GPIO_setOutputLowOnPin(GPIO_PORT_P5, GPIO_PIN3); //LED2 green for temp
+
         }
 
-        //disable mux
-        GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
 
-        //rotate motor back
-        param.dutyCycle = 1000;
-        Timer_A_outputPWM(TIMER_A0_BASE, &param);
-//        sleep(1);
     }
 
 
 
-    //check moisture
-    if(moisture[zone]< params[2+zone]){
+    //check moisture---------------------------------------------------------------------------------------------------
+    if(daytime==0){//(moisture[zone]< params[2+zone]) && daytime==0){
+
         //turn on LED and run motor
         if(zone==0){
             GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
@@ -566,29 +507,28 @@ void check_conditions(int zone){
 
         }
 
-        // enable
+        //enable motors (MUX)
         GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5);
 
         //send out pwm
-        param.dutyCycle = 2000;
+        param.dutyCycle = 1000*(moist_toggle[zone]+1); //either 0+1 or 1+1
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
-//        sleep(1);
+        delay();
+        moist_toggle[zone]= moist_toggle[zone]^1;
 
     }else{
+        //disable motors (MUX)
+        GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
+
         //turn off LED and rotate motor other direction
         if(zone==0){
             GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
+
+
         }else{
             GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN0); //LED4 blue for moisture
         }
 
-        //disable mux
-        GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
-
-        //rotate motor back
-        param.dutyCycle = 1000;
-        Timer_A_outputPWM(TIMER_A0_BASE, &param);
-//        sleep(1);
     }
 
 }
