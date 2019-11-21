@@ -1,24 +1,17 @@
 #include "main.h"
-#include "driverlib/driverlib.h"
-#include "hal_LCD.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-//#include <unistd.h>
-/*
- * This project contains some code samples that may be useful.
- *
- */
 
 char ADCState = 0; //Busy state of the ADC
 int16_t ADCResult = 0; //Storage for the ADC conversion result
 int daytime = 0; //set based on light sensor input
 int display_zone = 0;
-int params [4] =  {1000,1000,200,200}; // vent1, vent2, irr1, irr2
+int params [4] =  {25,25,256,256}; // vent1, vent2, irr1, irr2
 float temp[2]; //zone1, zone2
 int moisture[2]; //zone1, zone 2
 int debug =0;
 uint8_t uartRxData;
+static _Bool uartReceived = false;                          /* UART receive flag */
+static uint8_t cliBuffer[cliBufferSize];                    /* CLI output buffer */
+static uint8_t cliIndex = 0;                                /* CLI buffer index */
 
 
 void main(void)
@@ -73,10 +66,10 @@ void main(void)
 //    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
 //    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN3);
 
+    welcomeMsgCLI();
+
     //set mux to be disabled initially so that nothing is connected to pwm
     GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
-
-    setup_parameters();
 
     while(1) //Do this when you want an infinite loop of code
     {
@@ -140,7 +133,10 @@ void main(void)
             Timer_A_outputPWM(TIMER_A0_BASE, &param);
         }
 
-
+        if (uartReceived)                       /* UART communication */
+        {
+            uartTransmit();
+        }
 //        showHex(daytime);
 
     }
@@ -286,14 +282,35 @@ __interrupt
 void EUSCIA0_ISR(void)
 {
     uint8_t RxStatus = EUSCI_A_UART_getInterruptStatus(EUSCI_A0_BASE, EUSCI_A_UART_RECEIVE_INTERRUPT_FLAG);
-
     EUSCI_A_UART_clearInterrupt(EUSCI_A0_BASE, RxStatus);
+    uint8_t received_data = EUSCI_A_UART_receiveData(EUSCI_A0_BASE);
 
-    if (RxStatus)
+    if ((RxStatus) && !((received_data == 0x7F) && (cliIndex == 0))) /* received correct package, and not a backspace in the begining */
     {
-        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, EUSCI_A_UART_receiveData(EUSCI_A0_BASE));
-        //uartRxData = EUSCI_A_UART_receiveData(EUSCI_A0_BASE);
+        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, received_data); /* echo */
     }
+
+   if (received_data == '\r') /* enter key */
+        uartReceived = true;
+
+   else if (received_data == 0x7F) /* backspace key */
+   {
+       if (cliIndex > 0) /* if buffer not empty */
+       {
+           cliIndex--;
+           if (cliIndex < cliBufferSize) /* within buffer range */
+               cliBuffer[cliIndex] = 0; /* remove last char from buffer */
+       }
+   }
+
+   else if (cliIndex < cliBufferSize) /* other keys */
+   {
+       if ((isalpha(tolower(received_data))) || (isdigit(received_data)) || (received_data == ' ') || (received_data == '?')) /* legal keys */
+           cliBuffer[cliIndex] = tolower(received_data); /* store key */
+       cliIndex++;
+   }
+   else
+       cliIndex++;
 }
 
 /* PWM Initialization */
@@ -576,15 +593,142 @@ void check_conditions(int zone){
 
 }
 
-void setup_parameters( void )
+/* Tx to UART */
+void uartDisplay(uint8_t *sendText, uint8_t length)
 {
-    char message[] = "Please input desired temperature threshold (2 digits) and press Enter\n";
+    EUSCI_A_UART_transmitData(EUSCI_A0_BASE, 13); /* send carrier return*/
+    while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
+    EUSCI_A_UART_transmitData(EUSCI_A0_BASE, 10); /* send new line*/
+    while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
 
     int i;
-    for ( i = 0 ; i < sizeof(message) ; i++ )
+    for (i = 0 ; i < length ; i++)
     {
-        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (int) message[i]);
+        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, sendText[i]); /* send message */
+        while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
+    }
+
+    if ((sendText[0] != '>') && (sendText[0] != '#') && (sendText[0] != ' ')) /* if not enter key or welcome message, it was command, make new line */
+    {
+        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, 13); /* send carrier return*/
+        while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
+        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, 10); /* send new line*/
+        while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
+        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, 10); /* send new line*/
+        while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
+        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, '>'); /* send new prompt */
+        while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
+        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, 32); /* send space*/
     }
 }
 
+/* UART communication */
+void uartTransmit(void)
+{
+    uartReceived = false;
+    uint8_t txMsg[100]; /* UART TX message */
 
+    int i;
+    for (i = 0 ; i < 50 ; i++) /* initialize txMsg buffer */
+        txMsg[i] = 0;
+
+    if (! strcmp((char*)cliBuffer, "")) /* enter key*/
+    {
+        strcpy((char*) txMsg, "> "); /* prompt */
+        uartDisplay(txMsg, strlen((char*) txMsg));
+    }
+
+    else if (! strcmp((char*)cliBuffer, "?")) /* help key*/
+    {
+        welcomeMsgCLI();
+    }
+
+    else if ((cliBuffer[0] == 's') && (cliBuffer[1] == 'e') && (cliBuffer[2] == 't')) /* threshold set */
+    {
+        int newThreshold = -1;
+        if (isdigit(cliBuffer[9])) /* 3 digit value */
+            newThreshold = (cliBuffer[7] - 48)*100 + (cliBuffer[8] - 48)*10 + (cliBuffer[9] - 48);
+        else if (isdigit(cliBuffer[8])) /* 2 digit value */
+            newThreshold = (cliBuffer[7] - 48)*10 + (cliBuffer[8] - 48);
+        else if (isdigit(cliBuffer[7])) /* 1 digit value */
+            newThreshold = (cliBuffer[7] - 48);
+
+        if ((newThreshold >= 0) && (newThreshold <= 100)) /* threshold is a valid value */
+        {
+            if ((cliBuffer[4] == 't') && (cliBuffer[5] == '1')) /*temp1 threshold */
+            {
+                params[0] = newThreshold;
+                strcpy((char*) txMsg, "The new threshold for temperature motor 1 was set");
+                uartDisplay(txMsg, strlen((char*) txMsg));
+            }
+            else if ((cliBuffer[4] == 't') && (cliBuffer[5] == '2')) /*temp2 threshold */
+            {
+                params[1] = newThreshold;
+                strcpy((char*) txMsg, "The new threshold for temperature motor 2 was set");
+                uartDisplay(txMsg, strlen((char*) txMsg));
+            }
+            else if ((cliBuffer[4] == 'm') && (cliBuffer[5] == '1')) /*moisture1 threshold */
+            {
+                params[2] = (int)(((float)newThreshold / 100) * 1024);
+                strcpy((char*) txMsg, "The new threshold for soil motor 1 was set");
+                uartDisplay(txMsg, strlen((char*) txMsg));
+            }
+            else if ((cliBuffer[4] == 'm') && (cliBuffer[5] == '2')) /* moisture2 threshold */
+            {
+                params[3] = (int)(((float)newThreshold / 100) * 1024);
+                strcpy((char*) txMsg, "The new threshold for soil motor 2 was set");
+                uartDisplay(txMsg, strlen((char*) txMsg));
+            }
+            else /* threshold set error*/
+            {
+                strcpy((char*) txMsg, "ERROR: Invalid threshold!");
+                uartDisplay(txMsg, strlen((char*) txMsg));
+            }
+        }
+        else /* threshold set error*/
+        {
+            strcpy((char*) txMsg, "ERROR: Invalid threshold!");
+            uartDisplay(txMsg, strlen((char*) txMsg));
+        }
+    }
+
+    else if (! strcmp((char*)cliBuffer, "display")) /* print values */
+    {
+        sprintf((char*) txMsg," Displaying values:");
+        uartDisplay(txMsg, strlen((char*) txMsg));
+        sprintf((char*) txMsg,"  Zone 1 Temperature:    %d\t(Threshold: %d)", temp[0], params[0]);
+        uartDisplay(txMsg, strlen((char*) txMsg));
+        sprintf((char*) txMsg,"  Zone 1 Soil Moisture:  %d\t(Threshold: %d)", moisture[0], params[2]);
+        uartDisplay(txMsg, strlen((char*) txMsg));
+        sprintf((char*) txMsg,"  Zone 2 Temperature:    %d\t(Threshold: %d)", temp[1], params[1]);
+        uartDisplay(txMsg, strlen((char*) txMsg));
+        sprintf((char*) txMsg,"  Zone 2 Soil Moisture:  %d\t(Threshold: %d)\r\n> ", moisture[1], params[3]);
+        uartDisplay(txMsg, strlen((char*) txMsg));
+    }
+
+    else
+    {
+        strcpy((char*) txMsg, "ERROR: Invalid command!"); /* error */
+        uartDisplay(txMsg, strlen((char*) txMsg));
+    }
+
+    cliIndex = 0;
+    for (i = 0 ; i < cliBufferSize ; i++) /* clear receive buffer */
+        cliBuffer[i] = 0;
+}
+
+/* CLI welcome message */
+void welcomeMsgCLI(void)
+{
+    uint8_t cliWelcome[100];
+    int cliIndex;
+    for (cliIndex = 0 ; cliIndex < 100 ; cliIndex++)
+        cliWelcome[cliIndex]= 0; /* initialize welcome message */
+
+    strcpy((char*) cliWelcome, " Threshold for each motor (0-100) can be set independently with the SET command:");
+    uartDisplay(cliWelcome, strlen((char*) cliWelcome));
+    strcpy((char*) cliWelcome, " set t1 <num>    set m1 <num>    set t2 <num>    set m2 <num>\r\n");
+    uartDisplay(cliWelcome, strlen((char*) cliWelcome));
+    strcpy((char*) cliWelcome, "> "); /* prompt */
+    uartDisplay(cliWelcome, strlen((char*) cliWelcome));
+}

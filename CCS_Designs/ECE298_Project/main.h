@@ -1,3 +1,10 @@
+#include "driverlib/driverlib.h"
+#include "hal_LCD.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
 #ifndef MAIN_H_
 #define MAIN_H_
 
@@ -25,6 +32,8 @@
 #define ADC_IN_PORT     GPIO_PORT_P8
 #define ADC_IN_PIN      GPIO_PIN1
 #define ADC_IN_CHANNEL  ADC_INPUT_A9
+//Defining all values required for UART/Thresholds
+#define cliBufferSize 15
 
 void Init_GPIO(void);
 void Init_Clock(void);
@@ -34,6 +43,9 @@ void Init_ADC(int, int, int);
 void get_sensor_info(int zone, int temp_port, int temp_pin, int temp_adc_input, int moist_port, int moist_pin, int moist_adc_input);
 void Init_PB(void);
 void check_conditions(int);
+void uartDisplay(uint8_t *sendText, uint8_t length);
+void uartTransmit(void);
+void welcomeMsgCLI(void);
 
 
 Timer_A_outputPWMParam param; //Timer configuration data structure for PWM
