@@ -19,11 +19,12 @@ int params [4] =  {1000,1000,200,200}; // vent1, vent2, irr1, irr2
 float temp[2]; //zone1, zone2
 int moisture[2]; //zone1, zone 2
 int debug =0;
-
-
+uint8_t uartRxData;
+int temp_toggle[2] = {0,0};
+int moist_toggle[2] = {0,0};
 void delay()
 {
-    __delay_cycles(200000*2);
+    __delay_cycles(200000*10);
 }
 
 void main(void)
@@ -69,7 +70,12 @@ void main(void)
     __enable_interrupt();
 
 
-    GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5); //enable mux
+    //set mux to be disabled initially so that nothing is connected to pwm
+    GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
+
+    setup_parameters();
+
+//    GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5); //enable mux
 
 
     while(1) //Do this when you want an infinite loop of code
@@ -228,6 +234,7 @@ void EUSCIA0_ISR(void)
     if (RxStatus)
     {
         EUSCI_A_UART_transmitData(EUSCI_A0_BASE, EUSCI_A_UART_receiveData(EUSCI_A0_BASE));
+        //uartRxData = EUSCI_A_UART_receiveData(EUSCI_A0_BASE);
     }
 }
 
@@ -420,7 +427,7 @@ void check_conditions(int zone){
 
 
     //check temp----------------------------------------------------------------------------------------------------
-    if(daytime==0){//temp[zone]>params[zone]){
+    if(daytime==0){//(temp[zone]>params[zone])&& daytime==1){
 
         //set led output and motor selectors
         if(zone==0){
@@ -438,41 +445,38 @@ void check_conditions(int zone){
             GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
 
         }
-
+        //enable motors (MUX)
+        GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5);
 
         //send out pwm
-        param.dutyCycle = 2000;
+        param.dutyCycle = 1000*(temp_toggle[zone]+1); //either 0+1 or 1+1
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
-                delay();
+        delay();
+        temp_toggle[zone]= temp_toggle[zone]^1;
+
 
 
     }else{
+        //disable motors (MUX)
+        GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
+
         //turn off LEDs
         if(zone==0){
             GPIO_setOutputLowOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
 
-            // Select M0
-            GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
-            GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
         }else{
             GPIO_setOutputLowOnPin(GPIO_PORT_P5, GPIO_PIN3); //LED2 green for temp
 
-            // Select M2
-            GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
-            GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
         }
 
-        //rotate motor back
-        param.dutyCycle = 1000;
-        Timer_A_outputPWM(TIMER_A0_BASE, &param);
-                delay();
 
     }
 
 
 
     //check moisture---------------------------------------------------------------------------------------------------
-    if(daytime==0){//moisture[zone]< params[2+zone]){
+    if(daytime==0){//(moisture[zone]< params[2+zone]) && daytime==0){
+
         //turn on LED and run motor
         if(zone==0){
             GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
@@ -490,35 +494,41 @@ void check_conditions(int zone){
 
         }
 
+        //enable motors (MUX)
+        GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5);
 
         //send out pwm
-        param.dutyCycle = 2000;
+        param.dutyCycle = 1000*(moist_toggle[zone]+1); //either 0+1 or 1+1
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
-                delay();
+        delay();
+        moist_toggle[zone]= moist_toggle[zone]^1;
 
     }else{
+        //disable motors (MUX)
+        GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
+
         //turn off LED and rotate motor other direction
         if(zone==0){
             GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
 
-            // Select M1
-            GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
-            GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
 
         }else{
             GPIO_setOutputLowOnPin(GPIO_PORT_P8, GPIO_PIN0); //LED4 blue for moisture
-
-            // Select M3
-            GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN2); //i0
-            GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
-
         }
-
-        //rotate motor back
-        param.dutyCycle = 1000;
-        Timer_A_outputPWM(TIMER_A0_BASE, &param);
-        delay();
 
     }
 
 }
+
+void setup_parameters( void )
+{
+    char message[] = "Please input desired temperature threshold (2 digits) and press Enter\n";
+
+    int i;
+    for ( i = 0 ; i < sizeof(message) ; i++ )
+    {
+        EUSCI_A_UART_transmitData(EUSCI_A0_BASE, (int) message[i]);
+    }
+}
+
+
