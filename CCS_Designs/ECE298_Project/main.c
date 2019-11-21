@@ -23,22 +23,7 @@ int debug =0;
 
 void delay()
 {
-//    clock_t goal = mseconds + clock();
-//    while (goal > clock());
-//    volatile int i=0;
-//    while(i<100000){
-//        i++;
-//    }
-//    time_t seconds; //DOESNT WORK
-//    seconds = time(NULL);
-//    while((time(NULL) -seconds)<1);
-
-//    int i;
-//    for(i=0; i <1000; i++){
-//        __delay_cycles(200000/100);
-//    }
     __delay_cycles(200000*2);
-
 }
 
 void main(void)
@@ -77,24 +62,14 @@ void main(void)
     Init_LCD();     //Sets up the LaunchPad LCD display
     Init_PB();
 
-     /*
-     * The MSP430 MCUs have a variety of low power modes. They can be almost
-     * completely off and turn back on only when an interrupt occurs. You can
-     * look up the power modes in the Family User Guide under the Power Management
-     * Module (PMM) section. You can see the available API calls in the DriverLib
-     * user guide, or see "pmm.h" in the driverlib directory. Unless you
-     * purposefully want to play with the power modes, just leave this command in.
-     */
+
     PMM_unlockLPM5(); //Disable the GPIO power-on default high-impedance mode to activate previously configured port settings
 
     //All done initializations - turn interrupts back on.
     __enable_interrupt();
-//    GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN7); //LED3 blue for moisture
-//    GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN0); //LED4 blue for moisture
-//    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN2); //LED1 green for temp
-//    GPIO_setOutputHighOnPin(GPIO_PORT_P5, GPIO_PIN3);
 
-    GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5); //enable mux???
+
+    GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5); //enable mux
 
 
     while(1) //Do this when you want an infinite loop of code
@@ -110,44 +85,11 @@ void main(void)
         check_conditions(0);
         check_conditions(1);
 
-//        sprintf(curr_zone,"ZONE %d", display_zone);
-//        displayScrollText(curr_zone);
-//
-//        sprintf(daytime_msg,"DAY %d", daytime);
-//        displayScrollText(daytime_msg);
-//
-//        sprintf(temp_msg," TEMP %d",(int)temp[display_zone]);
-//        displayScrollText(temp_msg);
-//
-//        sprintf(moist_msg," MOIST %d",moisture[display_zone]);
-//        displayScrollText(moist_msg);
-
         sprintf(updates," ZONE %d DAY %d TMP %d WTR %d",display_zone,daytime,(int)temp[display_zone],moisture[display_zone]);
         displayScrollText(updates);
 
-//        if(display_zone){ //for testing motors
-//            param.dutyCycle = 2000;
-//            Timer_A_outputPWM(TIMER_A0_BASE, &param);
-//        }else{
-//
-//            param.dutyCycle = 1000;
-//            Timer_A_outputPWM(TIMER_A0_BASE, &param);
-//        }
-
-
-//        showHex(daytime);
-
     }
 
-    /*
-     * You can use the following code if you plan on only using interrupts
-     * to handle all your system events since you don't need any infinite loop of code.
-     *
-     * //Enter LPM0 - interrupts only
-     * __bis_SR_register(LPM0_bits);
-     * //For debugger to let it know that you meant for there to be no more code
-     * __no_operation();
-    */
 
 }
 
@@ -497,14 +439,11 @@ void check_conditions(int zone){
 
         }
 
-//        // enable
-//        GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5);
 
         //send out pwm
         param.dutyCycle = 2000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
                 delay();
-//        __delay_cycles(200000);
 
 
     }else{
@@ -523,14 +462,10 @@ void check_conditions(int zone){
             GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN3); //i1
         }
 
-//        //disable mux
-//        GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
-
         //rotate motor back
         param.dutyCycle = 1000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
                 delay();
-//        __delay_cycles(200000);
 
     }
 
@@ -555,14 +490,11 @@ void check_conditions(int zone){
 
         }
 
-//        // enable
-//        GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN5);
 
         //send out pwm
         param.dutyCycle = 2000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
                 delay();
-//        __delay_cycles(200000);
 
     }else{
         //turn off LED and rotate motor other direction
@@ -586,7 +518,6 @@ void check_conditions(int zone){
         param.dutyCycle = 1000;
         Timer_A_outputPWM(TIMER_A0_BASE, &param);
         delay();
-//        __delay_cycles(200000);
 
     }
 
