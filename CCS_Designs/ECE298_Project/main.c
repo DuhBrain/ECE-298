@@ -14,6 +14,8 @@ static uint8_t cliBuffer[cliBufferSize];                    /* CLI output buffer
 static uint8_t cliIndex = 0;                                /* CLI buffer index */
 int temp_toggle[2] = {0,0};
 int moist_toggle[2] = {0,0};
+uint8_t clearTerm = 12;
+
 void delay()
 {
     __delay_cycles(200000*10);
@@ -22,14 +24,6 @@ void delay()
 
 void main(void)
 {
-    char buttonState = 0; //Current button press state (to allow edge detection)
-    int toggle =1;
-    int count=0;
-    int sw = 0;
-    char daytime_msg[20];
-    char temp_msg[20];
-    char moist_msg[20];
-    char curr_zone[20];
     char updates[256];
 
     /*
@@ -41,29 +35,17 @@ void main(void)
      * more.
      * */
 
-    //Turn off interrupts during initialization
-    __disable_interrupt();
+    Init();
 
-    //Stop watchdog timer unless you plan on using it
-    WDT_A_hold(WDT_A_BASE);
-
-    // Initializations - see functions for more detail
-    Init_GPIO();    //Sets all pins to output low as a default
-    Init_PWM();     //Sets up a PWM output
-    Init_ADC(GPIO_PORT_P8,GPIO_PIN1,ADC_INPUT_A9);     //Sets up the ADC to sample
-    Init_Clock();   //Sets up the necessary system clocks
-    Init_UART();    //Sets up an echo over a COM port
-    Init_LCD();     //Sets up the LaunchPad LCD display
-    Init_PB();
-
-
-    PMM_unlockLPM5(); //Disable the GPIO power-on default high-impedance mode to activate previously configured port settings
-
-    //All done initializations - turn interrupts back on.
-    __enable_interrupt();
-
+    uartDisplay(&clearTerm, sizeof(uint8_t)); /* send clear terminal character */
 
     welcomeMsgCLI();
+
+    int iInit;
+    for (iInit = 0 ; iInit < cliBufferSize ; iInit++) /* initialize receive buffer */
+    {
+        cliBuffer[iInit] = 0;
+    }
 
     //set mux to be disabled initially so that nothing is connected to pwm
     GPIO_setOutputHighOnPin(GPIO_PORT_P2, GPIO_PIN5);
@@ -80,7 +62,7 @@ void main(void)
         check_conditions(0);
         check_conditions(1);
 
-        sprintf(updates," ZONE %d DAY %d TMP %d WTR %d",display_zone,daytime,(int)temp[display_zone],moisture[display_zone]);
+        sprintf(updates," ZONE %d DAY %d TMP %d WTR %d",display_zone,daytime,(int)temp[display_zone],(int)(((float)moisture[display_zone] / 1024) * 100));
         displayScrollText(updates);
 
         //UART communication
@@ -548,7 +530,7 @@ void uartDisplay(uint8_t *sendText, uint8_t length)
         while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
     }
 
-    if ((sendText[0] != '>') && (sendText[0] != '#') && (sendText[0] != ' ')) /* if not enter key or welcome message, it was command, make new line */
+    if ((sendText[0] != '>') && (sendText[0] != '#') && (sendText[0] != ' ') && (*sendText != clearTerm)) /* if not enter key or welcome message, it was command, make new line */
     {
         EUSCI_A_UART_transmitData(EUSCI_A0_BASE, 13); /* send carrier return*/
         while(EUSCI_A_UART_queryStatusFlags(EUSCI_A0_BASE, EUSCI_A_UART_BUSY)) {} /* wait for UART to be free - stop busy */
@@ -636,13 +618,13 @@ void uartTransmit(void)
     {
         sprintf((char*) txMsg," Displaying values:");
         uartDisplay(txMsg, strlen((char*) txMsg));
-        sprintf((char*) txMsg,"  Zone 1 Temperature:    %d\t(Threshold: %d)", temp[0], params[0]);
+        sprintf((char*) txMsg,"  Zone 1 Temperature:    %d\t(Threshold: %d)", (int)temp[0], params[0]);
         uartDisplay(txMsg, strlen((char*) txMsg));
-        sprintf((char*) txMsg,"  Zone 1 Soil Moisture:  %d\t(Threshold: %d)", moisture[0], params[2]);
+        sprintf((char*) txMsg,"  Zone 1 Soil Moisture:  %d\t(Threshold: %d)", (int)(((float)moisture[0] / 1024)*100), (int)(((float)params[2] / 1024) * 100));
         uartDisplay(txMsg, strlen((char*) txMsg));
-        sprintf((char*) txMsg,"  Zone 2 Temperature:    %d\t(Threshold: %d)", temp[1], params[1]);
+        sprintf((char*) txMsg,"  Zone 2 Temperature:    %d\t(Threshold: %d)", (int)temp[1], params[1]);
         uartDisplay(txMsg, strlen((char*) txMsg));
-        sprintf((char*) txMsg,"  Zone 2 Soil Moisture:  %d\t(Threshold: %d)\r\n> ", moisture[1], params[3]);
+        sprintf((char*) txMsg,"  Zone 2 Soil Moisture:  %d\t(Threshold: %d)\r\n> ", (int)(((float)moisture[1] / 1024)*100), (int)(((float)params[3] / 1024) * 100));
         uartDisplay(txMsg, strlen((char*) txMsg));
     }
 
@@ -663,7 +645,9 @@ void welcomeMsgCLI(void)
     uint8_t cliWelcome[100];
     int cliIndex;
     for (cliIndex = 0 ; cliIndex < 100 ; cliIndex++)
+    {
         cliWelcome[cliIndex]= 0; /* initialize welcome message */
+    }
 
     strcpy((char*) cliWelcome, " Threshold for each motor (0-100) can be set independently with the SET command:");
     uartDisplay(cliWelcome, strlen((char*) cliWelcome));
@@ -671,4 +655,30 @@ void welcomeMsgCLI(void)
     uartDisplay(cliWelcome, strlen((char*) cliWelcome));
     strcpy((char*) cliWelcome, "> "); /* prompt */
     uartDisplay(cliWelcome, strlen((char*) cliWelcome));
+}
+
+void Init(void)
+{
+    //Turn off interrupts during initialization
+    __disable_interrupt();
+
+    //Stop watchdog timer unless you plan on using it
+    WDT_A_hold(WDT_A_BASE);
+
+    // Initializations - see functions for more detail
+    Init_GPIO();    //Sets all pins to output low as a default
+    Init_PWM();     //Sets up a PWM output
+    Init_ADC(GPIO_PORT_P8,GPIO_PIN1,ADC_INPUT_A9);     //Sets up the ADC to sample
+    Init_Clock();   //Sets up the necessary system clocks
+    Init_UART();    //Sets up an echo over a COM port
+    Init_LCD();     //Sets up the LaunchPad LCD display
+    Init_PB();
+
+
+    PMM_unlockLPM5(); //Disable the GPIO power-on default high-impedance mode to activate previously configured port settings
+
+    //All done initializations - turn interrupts back on.
+    __enable_interrupt();
+
+    __delay_cycles(500000);
 }

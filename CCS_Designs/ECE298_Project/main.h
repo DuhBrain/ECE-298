@@ -36,6 +36,7 @@
 //Defining all values required for UART/Thresholds
 #define cliBufferSize 15
 
+void Init(void);
 void Init_GPIO(void);
 void Init_Clock(void);
 void Init_UART(void);
